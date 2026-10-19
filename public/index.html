@@ -34,7 +34,7 @@ pre{white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:6px;mar
 <main id="app"></main>
 <script>
 const PEOPLE = ['priya.shah (reviewer)','marcus.reed (reviewer)','maria.lopez','sam.ortiz','dev.patel','jin.wu'];
-const LABEL = {personal_loan:'Personal loan',credit_card:'Credit card',mortgage:'Mortgage',affiliate:'Affiliate',email:'Email',paid_social:'Paid social',search_ad:'Search ad',landing_page:'Landing page',sms:'SMS',pending:'Pending',in_review:'In review',changes_requested:'Changes requested',approved:'Approved',rejected:'Rejected',fast:'Fast lane',standard:'Standard',escalated:'Escalated'};
+const LABEL = {personal_loan:'Personal loan',credit_card:'Credit card',mortgage:'Mortgage',affiliate:'Affiliate',email:'Email',paid_social:'Paid social',search_ad:'Search ad',landing_page:'Landing page',sms:'SMS',text:'Text',image:'Image',video:'Video',social_post:'Social post',billboard:'Billboard',document:'PDF / document',pending:'Pending',in_review:'In review',changes_requested:'Changes requested',approved:'Approved',rejected:'Rejected',fast:'Fast lane',standard:'Standard',escalated:'Escalated'};
 let filter={status:'',lane:''};
 const $ = s => document.querySelector(s), app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -61,7 +61,7 @@ async function queue(){
    ${chip('status','','All')}${['pending','in_review','changes_requested','approved','rejected'].map(s=>chip('status',s,LABEL[s])).join('')}
    <span style="flex:1"></span>${chip('lane','','Any lane')}${['escalated','standard','fast'].map(s=>chip('lane',s,LABEL[s])).join('')}</div>
    <table><tr><th>Asset</th><th>Product / channel</th><th>Lane</th><th>Risk</th><th>Findings</th><th>Status</th><th>Assignee</th><th>SLA</th></tr>
-   ${rows.map(s=>`<tr class="row" data-id="${s.id}"><td><b>${esc(s.title)}</b><br><small>${esc(s.submitter)} · v${s.version}</small></td><td>${LABEL[s.product]}<br><small>${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''}</small></td><td>${tag(s.lane)}</td><td>${s.risk_score}</td><td>${s.finding_count}</td><td>${tag(s.status)}</td><td>${esc(s.assignee||'')}</td><td>${due(s)}</td></tr>`).join('')||'<tr><td colspan=8>Nothing here.</td></tr>'}</table></div>`;
+   ${rows.map(s=>`<tr class="row" data-id="${s.id}"><td><b>${esc(s.title)}</b><br><small>${esc(s.submitter)} · v${s.version}</small></td><td>${LABEL[s.product]}<br><small>${LABEL[s.format]} · ${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''}</small></td><td>${tag(s.lane)}</td><td>${s.risk_score}</td><td>${s.finding_count}</td><td>${tag(s.status)}</td><td>${esc(s.assignee||'')}</td><td>${due(s)}</td></tr>`).join('')||'<tr><td colspan=8>Nothing here.</td></tr>'}</table></div>`;
   app.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{filter[b.dataset.k]=b.dataset.v;queue()});
   app.querySelectorAll('tr.row').forEach(r=>r.onclick=()=>location.hash='item/'+r.dataset.id);
 }
@@ -74,13 +74,17 @@ function newForm(){
    <label>Title</label><input id="title">
    <div class="grid"><div><label>Product</label><select id="product">${opts({personal_loan:1,credit_card:1,mortgage:1})}</select></div>
    <div><label>Channel</label><select id="channel">${opts({affiliate:1,email:1,paid_social:1,search_ad:1,landing_page:1,sms:1})}</select></div></div>
+   <label>Format</label><select id="format">${opts({text:1,image:1,video:1,social_post:1,billboard:1,document:1})}</select>
+   <label>Creative files (image, PDF, or video up to 5 MB)</label><input id="files" type="file" multiple accept="image/*,application/pdf,video/*">
    <label>Affiliate partner (optional)</label><input id="partner"><label>Live or staging URL (optional)</label><input id="url">
-   <label>Copy</label><textarea id="body" placeholder="Paste the full ad copy, including disclosures"></textarea>
+   <label>Copy or caption (optional when attaching a creative)</label><textarea id="body" placeholder="Paste the full ad copy, including disclosures"></textarea>
    <p><button class="primary" id="go">Submit for review</button></p><div class="err" id="err"></div></div>
    <div class="card"><h2>Pre-screen</h2><div id="pre"><p>Findings appear as you type, so most issues get fixed before a reviewer sees the asset.</p></div></div></div>`;
-  let t;const run=()=>{clearTimeout(t);t=setTimeout(async()=>{const body=$('#body').value;if(!body.trim())return;const r=await api('screen',{product:$('#product').value,channel:$('#channel').value,body});$('#pre').innerHTML=`<p>${tag(r.lane)} risk ${r.score}/100</p>`+findingsHtml(r.findings)},300)};
-  ['body','product','channel'].forEach(i=>$('#'+i).oninput=run);
-  $('#go').onclick=async()=>{try{const r=await api('submissions',{title:$('#title').value,product:$('#product').value,channel:$('#channel').value,partner:$('#partner').value,url:$('#url').value,body:$('#body').value,submitter:me()});location.hash='item/'+r.id}catch(e){$('#err').textContent=e.message}};
+  let t;const run=()=>{clearTimeout(t);t=setTimeout(async()=>{const body=$('#body').value;if(!body.trim()&&$('#format').value==='text')return;const r=await api('screen',{product:$('#product').value,channel:$('#channel').value,format:$('#format').value,body});$('#pre').innerHTML=`<p>${tag(r.lane)} risk ${r.score}/100</p>`+findingsHtml(r.findings)},300)};
+  ['body','product','channel','format'].forEach(i=>$('#'+i).oninput=run);
+  $('#go').onclick=async()=>{try{$('#go').disabled=true;$('#err').textContent='';const r=await api('submissions',{title:$('#title').value,product:$('#product').value,channel:$('#channel').value,format:$('#format').value,partner:$('#partner').value,url:$('#url').value,body:$('#body').value,submitter:me()});
+    for(const f of $('#files').files){$('#err').textContent='Reading '+f.name+'...';const u=await fetch(`/api/submissions/${r.id}/attachments?name=${encodeURIComponent(f.name)}&actor=${me()}`,{method:'POST',headers:{'content-type':f.type},body:f});if(!u.ok)throw new Error(f.name+': '+(await u.json()).error)}
+    location.hash='item/'+r.id}catch(e){$('#err').textContent=e.message;$('#go').disabled=false}};
 }
 
 async function item(id){
@@ -88,8 +92,10 @@ async function item(id){
   const cur=s.findings.filter(f=>f.version===s.version);
   const open=['pending','in_review'].includes(s.status);
   app.innerHTML=`<p><a href="#queue">&larr; Queue</a></p><div class="grid"><div>
-   <div class="card"><h2>${esc(s.title)}</h2><p>${tag(s.status)} ${tag(s.lane)} risk ${s.risk_score}/100 · v${s.version} · ${LABEL[s.product]} · ${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''} · SLA ${due(s)}</p>
-   ${s.url?`<p><small>${esc(s.url)}</small></p>`:''}<pre>${esc(s.body)}</pre>
+   <div class="card"><h2>${esc(s.title)}</h2><p>${tag(s.status)} ${tag(s.lane)} risk ${s.risk_score}/100 · v${s.version} · ${LABEL[s.format]} · ${s.source==='manual'?'submitted manually':'received via '+s.source} · ${LABEL[s.product]} · ${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''} · SLA ${due(s)}</p>
+   ${s.url?`<p><small>${esc(s.url)}</small></p>`:''}${s.body?`<pre>${esc(s.body)}</pre>`:''}
+   ${s.attachments.filter(a=>a.version===s.version).map(a=>`<h3>${esc(a.name)}</h3>${a.mime.startsWith('image/')?`<img src="/api/attachments/${a.id}/file" style="max-width:100%;border-radius:6px">`:a.mime.startsWith('video/')?`<video src="/api/attachments/${a.id}/file" controls style="max-width:100%"></video>`:`<a href="/api/attachments/${a.id}/file" target="_blank">Open file</a>`}
+   ${a.visual_note?`<p><small>${esc(a.visual_note)}</small></p>`:''}${a.extracted_text?`<h3>Text read from creative</h3><pre>${esc(a.extracted_text)}</pre>`:''}${a.extraction_error?`<div class="err">Extraction failed: ${esc(a.extraction_error)}</div>`:''}`).join('')}
    ${s.decision_note?`<h3>Decision note</h3><p>${esc(s.decision_note)}</p>`:''}</div>
    <div class="card"><h3 style="margin-top:0">History</h3>${s.events.map(e=>`<div class="ev">${new Date(e.at).toLocaleString()} · <b>${esc(e.actor)}</b> ${esc(e.type.replace('_',' '))} ${esc(e.detail||'')}</div>`).join('')}</div></div>
    <div><div class="card"><h2>Pre-screen findings</h2>${findingsHtml(cur)}</div>

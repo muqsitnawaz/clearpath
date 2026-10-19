@@ -12,3 +12,7 @@ binding = "DB"
 database_name = "clearpath"
 database_id = "REPLACE_AFTER_d1_create"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "clearpath-media"

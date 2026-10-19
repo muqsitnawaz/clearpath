@@ -71,8 +71,39 @@ export const RULES = [
 
 const WEIGHT = { high: 40, medium: 15, low: 5 };
 
-export function screen({ product, channel, body }) {
+// Rules keyed on creative format rather than wording. `visual` carries what the vision step reported.
+const FORMAT_RULES = [
+  { id: 'ooh-legibility', severity: 'medium', formats: ['billboard'],
+    test: ({ text }) => text.split(/\s+/).filter(Boolean).length > 7,
+    message: 'Billboard copy is over 7 words; required disclosures are unlikely to be legible at driving speed.',
+    suggestion: 'Cut copy to a headline plus a short disclosure line, or move the required terms to the landing page URL shown on the board.' },
+  { id: 'video-unscreened', severity: 'medium', formats: ['video'],
+    test: () => true,
+    message: 'Audio and on-screen text in video are not machine-screened.',
+    suggestion: 'Reviewer must watch the clip and confirm spoken claims and on-screen disclosures; paste the transcript to run the text rules.' },
+  { id: 'social-ad-label', severity: 'medium', formats: ['social_post'], channels: ['paid_social', 'affiliate'],
+    test: ({ text }) => !/#ad\b|#sponsored|paid partnership|sponsored/i.test(text),
+    message: 'Social post has no #ad, sponsored, or paid-partnership label.',
+    suggestion: 'Use the platform paid-partnership tool and put #ad at the start of the caption.' },
+  { id: 'disclosure-legibility', severity: 'high', formats: ['image', 'billboard', 'social_post', 'video', 'document'],
+    test: ({ visual }) => !!visual?.small_print,
+    message: 'Vision check: disclosures appear small, low-contrast, or fleeting.',
+    suggestion: 'Increase disclosure size and contrast so it is as prominent as the claim it qualifies (Reg Z clear-and-conspicuous).' },
+  { id: 'no-extractable-text', severity: 'medium', formats: ['image', 'billboard', 'document'],
+    test: ({ text }) => !text.trim(),
+    message: 'No text was extracted from the creative, so nothing was screened.',
+    suggestion: 'Attach the creative or paste its copy; the reviewer must read it manually.' },
+];
+
+export const FORMATS = ['text', 'image', 'video', 'social_post', 'billboard', 'document'];
+
+export function screen({ product, channel, format = 'text', body, visual }) {
   const findings = [];
+  for (const f of FORMAT_RULES) {
+    if (!f.formats.includes(format)) continue;
+    if (f.channels && !f.channels.includes(channel)) continue;
+    if (f.test({ text: body, visual })) findings.push(finding(f, null));
+  }
   for (const r of RULES) {
     if (!r.products.includes(product)) continue;
     if (r.channels && !r.channels.includes(channel)) continue;

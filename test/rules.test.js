@@ -38,3 +38,22 @@ test('mortgage requires NMLS and equal housing; loan does not', () => {
   assert.deepEqual(ids(screen({ product: 'mortgage', channel: 'email', body })), ['equal-housing', 'nmls']);
   assert.deepEqual(ids(screen({ product: 'personal_loan', channel: 'email', body })), []);
 });
+
+test('format rules: billboard length, social ad label, video always needs a human', () => {
+  const long = screen({ product: 'personal_loan', channel: 'landing_page', format: 'billboard',
+    body: 'Rates from 8.99% APR on personal loans for everyone today. Terms apply. Rates vary.' });
+  assert.ok(ids(long).includes('ooh-legibility'));
+  const short = screen({ product: 'personal_loan', channel: 'landing_page', format: 'billboard', body: 'Terms apply. Rates vary.' });
+  assert.ok(!ids(short).includes('ooh-legibility'));
+  const post = screen({ product: 'personal_loan', channel: 'paid_social', format: 'social_post', body: 'Terms apply. Rates vary.' });
+  assert.ok(ids(post).includes('social-ad-label'));
+  const ok = screen({ product: 'personal_loan', channel: 'paid_social', format: 'social_post', body: '#ad Terms apply. Rates vary.' });
+  assert.ok(!ids(ok).includes('social-ad-label'));
+  assert.ok(ids(screen({ product: 'personal_loan', channel: 'email', format: 'video', body: 'Terms apply. Rates vary.' })).includes('video-unscreened'));
+});
+
+test('vision small-print flag is a high finding and escalates; empty extraction is flagged', () => {
+  const r = screen({ product: 'personal_loan', channel: 'paid_social', format: 'image', body: 'Terms apply. Rates vary.', visual: { small_print: true } });
+  assert.equal(r.lane, 'escalated');
+  assert.ok(ids(screen({ product: 'personal_loan', channel: 'email', format: 'image', body: '' })).includes('no-extractable-text'));
+});
