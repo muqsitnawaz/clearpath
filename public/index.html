@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClearPath Review</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14213d;--mute:#5b6577;--line:#e2e6ec;--brand:#0b6e4f;--high:#b42318;--med:#b54708;--low:#475467;--hi-bg:#fef3f2;--med-bg:#fffaeb;--low-bg:#f2f4f7}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1420;--card:#171e2e;--ink:#e8ecf4;--mute:#9aa5b8;--line:#28324a;--brand:#3ccf9b;--high:#ff8a80;--med:#ffb347;--low:#aab4c5;--hi-bg:#3a1d1f;--med-bg:#392a14;--low-bg:#222b3d}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:24px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--line)}
+header b{font-size:16px;color:var(--brand)}nav a{margin-right:16px;white-space:nowrap;color:var(--mute);text-decoration:none;cursor:pointer;padding:4px 0}nav a.on{color:var(--ink);border-bottom:2px solid var(--brand)}
+header select{margin-left:auto;width:auto}
+main{max-width:1100px;margin:24px auto;padding:0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:18px}h3{margin:16px 0 8px;font-size:14px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mute);font-weight:500;font-size:12px}
+tr.row{cursor:pointer}tr.row:hover{background:var(--bg)}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:var(--low-bg);color:var(--low)}
+.tag.escalated,.tag.high{background:var(--hi-bg);color:var(--high)}.tag.standard,.tag.medium{background:var(--med-bg);color:var(--med)}.tag.fast,.tag.approved{background:#e7f6ef;color:#0b6e4f}.tag.rejected{background:var(--hi-bg);color:var(--high)}
+.late{color:var(--high);font-weight:600}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+button{font:inherit;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff}button.danger{color:var(--high)}button.on{border-color:var(--brand);color:var(--brand)}
+label{display:block;margin:10px 0 4px;color:var(--mute);font-size:12px}input,select,textarea{font:inherit;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+textarea{min-height:160px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.grid3{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.kpi{font-size:28px;font-weight:600}.kpi small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
+.finding{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;background:var(--low-bg);border-radius:0 6px 6px 0}.finding.high{border-color:var(--high);background:var(--hi-bg)}.finding.medium{border-color:var(--med);background:var(--med-bg)}
+.finding code{background:rgba(0,0,0,.08);padding:0 4px;border-radius:3px}
+pre{white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:6px;margin:0;font:inherit}
+.bar{height:14px;background:var(--brand);border-radius:3px;min-width:2px}.err{color:var(--high);margin-top:8px}
+.ev{color:var(--mute);font-size:13px;padding:2px 0}
+</style></head><body>
+<header><b>ClearPath Review</b>
+<nav><a data-v="queue">Queue</a><a data-v="new">Submit asset</a><a data-v="dash">Dashboard</a></nav>
+<select id="me" title="Acting as"></select></header>
+<main id="app"></main>
+<script>
+const PEOPLE = ['priya.shah (reviewer)','marcus.reed (reviewer)','maria.lopez','sam.ortiz','dev.patel','jin.wu'];
+const LABEL = {personal_loan:'Personal loan',credit_card:'Credit card',mortgage:'Mortgage',affiliate:'Affiliate',email:'Email',paid_social:'Paid social',search_ad:'Search ad',landing_page:'Landing page',sms:'SMS',pending:'Pending',in_review:'In review',changes_requested:'Changes requested',approved:'Approved',rejected:'Rejected',fast:'Fast lane',standard:'Standard',escalated:'Escalated'};
+let filter={status:'',lane:''};
+const $ = s => document.querySelector(s), app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tag = k => `<span class="tag ${k}">${LABEL[k]||k}</span>`;
+const me = () => $('#me').value.split(' ')[0];
+const api = async (p, body) => { const r = await fetch('/api/'+p, body ? {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)} : {}); const j = await r.json(); if(!r.ok) throw new Error(j.error); return j; };
+function human(ms){const h=Math.round(Math.abs(ms)/36e5);if(h<1)return 'under an hour';if(h<48)return h+(h===1?' hour':' hours');const d=Math.round(h/24);return d+' days'}
+function due(s){ if(['approved','rejected','changes_requested'].includes(s.status)) return '<span class="tag">done</span>'; const d=new Date(s.due_at)-Date.now(); return d<0?`<span class="late">${human(d)} overdue</span>`:`in ${human(d)}`; }
+$('#me').innerHTML = PEOPLE.map(p=>`<option>${p}</option>`).join('');
+document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{location.hash=a.dataset.v});
+addEventListener('hashchange',route);route();
+
+function route(){
+  const [v,id]=(location.hash.slice(1)||'queue').split('/');
+  document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===(v==='item'?'queue':v)));
+  ({queue,new:newForm,dash,item})[v]?.(id);
+}
+
+async function queue(){
+  const q=new URLSearchParams(Object.entries(filter).filter(([,v])=>v)).toString();
+  const rows=await api('submissions?'+q);
+  const chip=(k,v,l)=>`<button class="${filter[k]===v?'on':''}" data-k="${k}" data-v="${v}">${l}</button>`;
+  app.innerHTML=`<div class="card"><h2>Review queue</h2><div class="filters">
+   ${chip('status','','All')}${['pending','in_review','changes_requested','approved','rejected'].map(s=>chip('status',s,LABEL[s])).join('')}
+   <span style="flex:1"></span>${chip('lane','','Any lane')}${['escalated','standard','fast'].map(s=>chip('lane',s,LABEL[s])).join('')}</div>
+   <table><tr><th>Asset</th><th>Product / channel</th><th>Lane</th><th>Risk</th><th>Findings</th><th>Status</th><th>Assignee</th><th>SLA</th></tr>
+   ${rows.map(s=>`<tr class="row" data-id="${s.id}"><td><b>${esc(s.title)}</b><br><small>${esc(s.submitter)} · v${s.version}</small></td><td>${LABEL[s.product]}<br><small>${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''}</small></td><td>${tag(s.lane)}</td><td>${s.risk_score}</td><td>${s.finding_count}</td><td>${tag(s.status)}</td><td>${esc(s.assignee||'')}</td><td>${due(s)}</td></tr>`).join('')||'<tr><td colspan=8>Nothing here.</td></tr>'}</table></div>`;
+  app.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{filter[b.dataset.k]=b.dataset.v;queue()});
+  app.querySelectorAll('tr.row').forEach(r=>r.onclick=()=>location.hash='item/'+r.dataset.id);
+}
+
+const findingsHtml=fs=>fs.length?fs.map(f=>`<div class="finding ${f.severity}">${tag(f.severity)} <b>${esc(f.message)}</b>${f.excerpt?` <code>${esc(f.excerpt)}</code>`:''}<br><small>Fix: ${esc(f.suggestion)}</small></div>`).join(''):'<p>No issues found by the pre-screen.</p>';
+
+function newForm(){
+  const opts=(o)=>Object.keys(o).map(k=>`<option value="${k}">${LABEL[k]}</option>`).join('');
+  app.innerHTML=`<div class="grid"><div class="card"><h2>Submit marketing asset</h2>
+   <label>Title</label><input id="title">
+   <div class="grid"><div><label>Product</label><select id="product">${opts({personal_loan:1,credit_card:1,mortgage:1})}</select></div>
+   <div><label>Channel</label><select id="channel">${opts({affiliate:1,email:1,paid_social:1,search_ad:1,landing_page:1,sms:1})}</select></div></div>
+   <label>Affiliate partner (optional)</label><input id="partner"><label>Live or staging URL (optional)</label><input id="url">
+   <label>Copy</label><textarea id="body" placeholder="Paste the full ad copy, including disclosures"></textarea>
+   <p><button class="primary" id="go">Submit for review</button></p><div class="err" id="err"></div></div>
+   <div class="card"><h2>Pre-screen</h2><div id="pre"><p>Findings appear as you type, so most issues get fixed before a reviewer sees the asset.</p></div></div></div>`;
+  let t;const run=()=>{clearTimeout(t);t=setTimeout(async()=>{const body=$('#body').value;if(!body.trim())return;const r=await api('screen',{product:$('#product').value,channel:$('#channel').value,body});$('#pre').innerHTML=`<p>${tag(r.lane)} risk ${r.score}/100</p>`+findingsHtml(r.findings)},300)};
+  ['body','product','channel'].forEach(i=>$('#'+i).oninput=run);
+  $('#go').onclick=async()=>{try{const r=await api('submissions',{title:$('#title').value,product:$('#product').value,channel:$('#channel').value,partner:$('#partner').value,url:$('#url').value,body:$('#body').value,submitter:me()});location.hash='item/'+r.id}catch(e){$('#err').textContent=e.message}};
+}
+
+async function item(id){
+  const s=await api('submissions/'+id);
+  const cur=s.findings.filter(f=>f.version===s.version);
+  const open=['pending','in_review'].includes(s.status);
+  app.innerHTML=`<p><a href="#queue">&larr; Queue</a></p><div class="grid"><div>
+   <div class="card"><h2>${esc(s.title)}</h2><p>${tag(s.status)} ${tag(s.lane)} risk ${s.risk_score}/100 · v${s.version} · ${LABEL[s.product]} · ${LABEL[s.channel]}${s.partner?' · '+esc(s.partner):''} · SLA ${due(s)}</p>
+   ${s.url?`<p><small>${esc(s.url)}</small></p>`:''}<pre>${esc(s.body)}</pre>
+   ${s.decision_note?`<h3>Decision note</h3><p>${esc(s.decision_note)}</p>`:''}</div>
+   <div class="card"><h3 style="margin-top:0">History</h3>${s.events.map(e=>`<div class="ev">${new Date(e.at).toLocaleString()} · <b>${esc(e.actor)}</b> ${esc(e.type.replace('_',' '))} ${esc(e.detail||'')}</div>`).join('')}</div></div>
+   <div><div class="card"><h2>Pre-screen findings</h2>${findingsHtml(cur)}</div>
+   ${open?`<div class="card"><h2>Decision</h2><label>Note (required to reject or request changes)</label><textarea id="note" style="min-height:70px"></textarea>
+    <p><button class="primary" data-d="approve">${s.lane==='fast'?'Confirm &amp; approve':'Approve'}</button> <button data-d="request_changes">Request changes</button> <button class="danger" data-d="reject">Reject</button> ${s.assignee?'':'<button id="claim">Assign to me</button>'}</p><div class="err" id="err"></div></div>`:''}
+   ${s.status==='changes_requested'?`<div class="card"><h2>Resubmit</h2><textarea id="rbody">${esc(s.body)}</textarea><p><button class="primary" id="re">Resubmit as v${s.version+1}</button></p><div class="err" id="err"></div></div>`:''}
+   </div></div>`;
+  const act=async(p,b)=>{try{await api(`submissions/${id}/${p}`,b);item(id)}catch(e){$('#err').textContent=e.message}};
+  app.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>act('decision',{decision:b.dataset.d,note:$('#note').value,actor:me()}));
+  $('#claim')&&($('#claim').onclick=()=>act('assign',{assignee:me()}));
+  $('#re')&&($('#re').onclick=()=>act('resubmit',{body:$('#rbody').value}));
+}
+
+async function dash(){
+  const m=await api('metrics');
+  const sum=f=>m.counts.filter(f).reduce((a,c)=>a+c.n,0);
+  const total=sum(()=>true),open=sum(c=>['pending','in_review'].includes(c.status));
+  const decided=m.cycle.reduce((a,c)=>a+c.n,0);
+  const avg=decided?m.cycle.reduce((a,c)=>a+c.avg_hours*c.n,0)/decided:0;
+  const max=Math.max(1,...m.top_rules.map(r=>r.n));
+  app.innerHTML=`<div class="grid3">
+   <div class="card kpi">${open}<small>awaiting review</small></div>
+   <div class="card kpi ${m.overdue?'late':''}">${m.overdue}<small>past SLA</small></div>
+   <div class="card kpi">${avg.toFixed(1)} hrs<small>average time to decision</small></div>
+   <div class="card kpi">${total?Math.round(100*sum(c=>c.lane==='fast')/total):0}%<small>of volume in the fast lane</small></div></div>
+   <div class="grid"><div class="card"><h2>Open work by lane</h2><table>${['escalated','standard','fast'].map(l=>`<tr><td>${tag(l)}</td><td>${sum(c=>c.lane===l&&['pending','in_review'].includes(c.status))} open</td></tr>`).join('')}</table>
+   <h3>Time to decision by lane</h3><table>${m.cycle.map(c=>`<tr><td>${tag(c.lane)}</td><td>${c.avg_hours.toFixed(1)} hrs across ${c.n}</td></tr>`).join('')}</table></div>
+   <div class="card"><h2>Most common findings</h2><table>${m.top_rules.map(r=>`<tr><td>${esc(r.rule_id)} ${tag(r.severity)}</td><td style="width:45%"><div class="bar" style="width:${100*r.n/max}%"></div></td><td>${r.n}</td></tr>`).join('')}</table>
+   <p><small>Frequent findings are candidates for approved copy blocks that skip re-review.</small></p></div></div>`;
+}
+</script></body></html>

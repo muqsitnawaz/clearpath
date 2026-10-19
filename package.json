@@ -1,0 +1,14 @@
+{
+  "name": "clearpath",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --persist-to .wrangler/state",
+    "migrate:local": "wrangler d1 migrations apply clearpath --local --persist-to .wrangler/state",
+    "seed:local": "node scripts/seed.mjs > .wrangler/seed.sql && wrangler d1 execute clearpath --local --persist-to .wrangler/state --file .wrangler/seed.sql",
+    "deploy": "wrangler d1 migrations apply clearpath --remote && wrangler deploy",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "devDependencies": { "wrangler": "^4" }
+}
